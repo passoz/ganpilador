@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualizador de Processos</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --glass-bg:#2a2a2e;
+  --glass-surface:rgba(50,50,55,0.7);
+  --glass-border:rgba(255,255,255,0.08);
+  --glass-shadow:rgba(0,0,0,0.4);
+  --gondim-gold:#FFD700;
+  --gondim-dark-gold:#F7C500;
+  --text-primary:#e8e8ec;
+  --text-secondary:#a0a0a8;
+  --success:#4CAF50;
+  --warning:#FF9800;
+  --danger:#F44336;
+}
+[data-theme="light"]{
+  --glass-bg:#d4d8e0;
+  --glass-surface:rgba(255,255,255,0.6);
+  --glass-border:rgba(0,0,0,0.08);
+  --glass-shadow:rgba(0,0,0,0.15);
+  --text-primary:#2a2a30;
+  --text-secondary:#5a5a65;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  background:var(--glass-bg);
+  background-image:
+    radial-gradient(ellipse at 20% 0%,rgba(40,40,50,0.8) 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 100%,rgba(30,30,40,0.6) 0%,transparent 50%),
+    linear-gradient(180deg,#0d0d10 0%,#1a1a22 50%,#0d0d10 100%);
+  color:var(--text-primary);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+[data-theme="light"] body{
+  background:var(--glass-bg);
+  background-image:
+    radial-gradient(ellipse at 30% 0%,rgba(255,255,255,0.6) 0%,transparent 50%),
+    radial-gradient(ellipse at 70% 100%,rgba(200,200,210,0.5) 0%,transparent 50%),
+    linear-gradient(180deg,#c8ccd4 0%,#d4d8e0 50%,#c0c4cc 100%);
+}
+.orb{
+  position:fixed;width:1200px;height:1200px;border-radius:50%;
+  pointer-events:none;opacity:0.06;z-index:0;
+  background:radial-gradient(circle,var(--gondim-gold) 0%,transparent 70%);
+  transform:translate(-50%,-50%);
+  transition:left 0.8s cubic-bezier(0.25,0.46,0.45,0.94),top 0.8s cubic-bezier(0.25,0.46,0.45,0.94);
+  filter:blur(60px);
+}
+.container{
+  position:relative;z-index:1;
+  max-width:1200px;margin:0 auto;padding:1.5rem 1.2rem;
+}
+.logo-container{text-align:center;margin-bottom:1.5rem}
+.main-logo{height:100px;max-width:100%;object-fit:contain;filter:drop-shadow(0 2px 10px rgba(0,0,0,0.3))}
+[data-theme="light"] .main-logo{filter:drop-shadow(0 4px 20px rgba(0,0,0,0.4))}
+.theme-toggle{
+  position:fixed;top:20px;right:20px;z-index:1001;
+  width:56px;height:28px;border-radius:14px;
+  background:rgba(60,60,65,0.8);backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--glass-border);cursor:pointer;
+  box-shadow:0 4px 15px var(--glass-shadow);
+}
+[data-theme="light"] .theme-toggle{background:rgba(255,255,255,0.7)}
+.theme-toggle::before{
+  content:'';position:absolute;top:3px;left:3px;
+  width:20px;height:20px;border-radius:50%;
+  background:linear-gradient(135deg,var(--text-secondary),#666);
+  transition:transform 0.3s ease,background 0.3s ease;
+  box-shadow:0 2px 5px rgba(0,0,0,0.3);
+}
+[data-theme="light"] .theme-toggle::before{
+  transform:translateX(28px);
+  background:linear-gradient(135deg,#ffe082,var(--gondim-gold));
+}
+.theme-icon{position:absolute;top:50%;transform:translateY(-50%);font-size:11px}
+.theme-icon.sun{left:8px;color:var(--gondim-gold)}
+.theme-icon.moon{right:8px;color:var(--text-secondary)}
+[data-theme="light"] .theme-icon.sun,
+:root .theme-icon.moon{display:none}
+:root .theme-icon.sun,
+[data-theme="light"] .theme-icon.moon{display:block}
+.card{
+  background:var(--glass-surface);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);
+  border-radius:16px;padding:1.25rem;
+  margin-bottom:1rem;
+  box-shadow:0 8px 32px var(--glass-shadow);
+}
+.card-title{
+  font-size:.8rem;text-transform:uppercase;letter-spacing:1.5px;
+  opacity:.6;margin-bottom:.75rem;
+}
+.upload-row{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.upload-area{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:2rem;border:2px dashed var(--glass-border);border-radius:12px;
+  background:transparent;cursor:pointer;
+  transition:all 0.3s ease;text-align:center;min-height:80px;
+}
+.upload-area:hover,.upload-area.dragover{border-color:var(--gondim-gold);background:rgba(255,215,0,0.08)}
+.upload-area .icon{font-size:28px;margin-bottom:2px}
+.upload-area strong{font-size:.9em}
+.upload-area .sub{color:var(--text-secondary);font-size:.78em;margin-top:2px}
+.upload-area input{display:none}
+.upload-area.small{padding:12px 16px;min-height:auto;flex-direction:row;gap:6px;flex:0 1 auto;cursor:pointer}
+.upload-area.small .icon{font-size:18px;margin-bottom:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.btn{
+  padding:7px 16px;border:none;border-radius:12px;font-size:.8em;font-weight:600;
+  cursor:pointer;transition:all 0.3s ease;display:inline-flex;align-items:center;gap:5px;
+  background:var(--glass-surface);color:var(--text-primary);
+  backdrop-filter:blur(10px);border:1px solid var(--glass-border);
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-gold{
+  background:linear-gradient(135deg,var(--gondim-gold),var(--gondim-dark-gold));
+  color:#1a1a1a;box-shadow:0 4px 15px rgba(255,215,0,0.3);
+}
+.btn-gold:hover{box-shadow:0 6px 20px rgba(255,215,0,0.4)}
+.btn-danger{
+  background:rgba(244,67,54,0.2);color:var(--danger);
+  border-color:rgba(244,67,54,0.3);
+}
+.btn-danger:hover{background:rgba(244,67,54,0.3)}
+.summary-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.summary-card{
+  background:var(--glass-surface);backdrop-filter:blur(10px);
+  border:1px solid var(--glass-border);border-radius:12px;
+  padding:10px 14px;flex:1;min-width:90px;
+  box-shadow:0 4px 15px var(--glass-shadow);
+}
+.summary-card .num{font-size:1.3em;font-weight:700;color:var(--gondim-gold)}
+.summary-card .label{font-size:.7em;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.files-info{
+  font-size:.74em;color:var(--text-secondary);margin-bottom:8px;
+  padding:6px 10px;background:var(--glass-surface);border-radius:8px;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  border:1px solid var(--glass-border);
+}
+.files-info .badge{
+  background:rgba(255,255,255,0.06);padding:1px 7px;border-radius:6px;font-size:.9em;
+}
+.files-info .layout-badge{
+  background:rgba(255,215,0,0.15);padding:1px 7px;border-radius:6px;font-size:.9em;color:var(--gondim-gold);
+}
+.processos{display:flex;flex-direction:column;gap:10px}
+.processo{
+  background:var(--glass-surface);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);border-radius:16px;
+  overflow:hidden;box-shadow:0 8px 32px var(--glass-shadow);
+}
+.processo-header{
+  padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;
+  align-items:center;user-select:none;transition:background 0.3s ease;
+}
+.processo-header:hover{background:var(--glass-highlight,rgba(255,255,255,0.05))}
+.processo-header .numero{font-size:.95em;font-weight:600;letter-spacing:.2px}
+.processo-header .toggle{font-size:1.1em;transition:transform 0.3s;opacity:.6}
+.processo-header .toggle.open{transform:rotate(180deg)}
+.processo-body{padding:0;display:none}
+.processo-body.open{display:block}
+.processo-body>div{padding:12px 16px;border-top:1px solid var(--glass-border)}
+.processo-body .section-title{
+  font-size:.75em;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;
+  color:var(--gondim-gold);margin-bottom:6px;opacity:.85;
+}
+table{width:100%;border-collapse:collapse;font-size:.8em}
+td,th{padding:4px 7px;text-align:left;border-bottom:1px solid var(--glass-border);vertical-align:top}
+th{font-weight:600;color:var(--text-secondary);opacity:.7;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.keyval{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.82em}
+.keyval .k{font-weight:600;color:var(--text-secondary);white-space:nowrap;opacity:.8}
+.keyval .v{color:var(--text-primary)}
+.partes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:7px}
+.parte-card{
+  background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);
+  border-radius:12px;padding:9px 11px;
+}
+[data-theme="light"] .parte-card{background:rgba(0,0,0,0.03)}
+.parte-card .nome{font-weight:600;font-size:.85em}
+.parte-card .tag{display:inline-block;font-size:.62em;padding:1px 6px;border-radius:8px;margin:1px 0;font-weight:600}
+.tag-ATIVO{background:rgba(76,175,80,0.2);color:var(--success)}
+.tag-PASSIVO{background:rgba(244,67,54,0.2);color:var(--danger)}
+.tag-FISICA{background:rgba(33,150,243,0.2);color:#64b5f6}
+.tag-JURIDICA{background:rgba(255,152,0,0.2);color:var(--warning)}
+.parte-card .detail{font-size:.76em;color:var(--text-secondary);margin-top:2px}
+.parte-card .adv{font-size:.74em;color:var(--text-secondary);margin-top:4px;padding-top:4px;border-top:1px solid var(--glass-border)}
+.erros-section{
+  background:var(--glass-surface);backdrop-filter:blur(20px);
+  border:1px solid rgba(244,67,54,0.2);border-radius:16px;
+  padding:12px 16px;margin-top:12px;
+  box-shadow:0 8px 32px var(--glass-shadow);
+}
+.erros-section h3{color:var(--danger);font-size:.82em;margin-bottom:6px}
+.erro-item{
+  background:rgba(244,67,54,0.08);border:1px solid rgba(244,67,54,0.15);
+  border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:.78em;
+}
+.erro-item .erro-proc{font-weight:600;color:var(--danger)}
+.erro-item .erro-motivo{color:var(--text-secondary);margin-top:1px}
+.empty-state{text-align:center;padding:3rem 1.5rem;color:var(--text-secondary)}
+.empty-state .big-icon{font-size:48px;margin-bottom:8px}
+.status-msg{font-size:.78em;margin-left:8px;align-self:center;transition:opacity 0.3s}
+.conflito-dot{color:var(--warning);font-size:.9em;margin-right:2px}
+.conflito-vals{display:flex;flex-wrap:wrap;gap:4px;align-items:baseline}
+.conflito-val{background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.25);border-radius:6px;padding:1px 7px;font-size:.85em}
+.conflito-vs{font-size:.65em;color:var(--text-secondary);margin:0 2px;font-weight:600;text-transform:uppercase}
+
+/* ─── Modal ─── */
+.modal-overlay{
+  position:fixed;inset:0;z-index:1999;
+  background:rgba(0,0,0,0.25);
+  backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;
+  transition:opacity 0.3s ease;
+}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal-window{
+  position:fixed;z-index:2000;
+  top:50%;left:50%;transform:translate(-50%,-50%) scale(0.92);
+  background:var(--glass-bg);
+  border:1px solid var(--glass-border);
+  border-radius:16px;
+  box-shadow:0 16px 48px rgba(0,0,0,0.5);
+  max-width:700px;width:calc(100% - 2rem);max-height:80vh;
+  display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.25s ease,transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+.modal-window.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.modal-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:1rem 1.25rem;border-bottom:1px solid var(--glass-border);
+}
+.modal-header h2{font-size:.95em;font-weight:600}
+.modal-close{
+  background:none;border:none;color:var(--text-secondary);font-size:1.2em;
+  cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.2s;
+}
+.modal-close:hover{background:rgba(255,255,255,0.08);color:var(--text-primary)}
+.modal-body{padding:1rem 1.25rem;overflow-y:auto;flex:1}
+.modal-item{
+  background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);
+  border-radius:10px;padding:.7rem .9rem;margin-bottom:.5rem;
+}
+[data-theme="light"] .modal-item{background:rgba(0,0,0,0.02)}
+.modal-item:last-child{margin-bottom:0}
+.modal-item .proc{font-weight:600;font-size:.88em;margin-bottom:3px}
+.modal-item .field{font-size:.78em;color:var(--text-secondary);margin:2px 0}
+.modal-item .vals{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.modal-item .val-tag{
+  background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.25);
+  border-radius:6px;padding:1px 7px;font-size:.8em;
+}
+.modal-item .val-tag.err{background:rgba(244,67,54,0.1);border-color:rgba(244,67,54,0.2)}
+.modal-item .val-tag .src{font-size:.65em;color:var(--text-secondary);margin-left:4px;opacity:.7}
+.val-clickable{cursor:pointer;transition:all .15s}
+.val-clickable:hover{background:rgba(255,215,0,0.25);border-color:var(--gondim-gold);transform:scale(1.05)}
+.modal-empty{padding:2rem;text-align:center;color:var(--text-secondary);font-size:.85em}
+.summary-card-cursor{cursor:pointer}
+.summary-card-cursor:hover{filter:brightness(1.15);transform:translateY(-1px);transition:all 0.2s}
+.sort-area{width:100%;min-height:200px;background:rgba(0,0,0,0.15);border:1px solid var(--glass-border);border-radius:10px;color:var(--text-primary);padding:.7rem;font-size:.82em;font-family:monospace;resize:vertical;outline:none;transition:border-color 0.2s}
+.sort-area:focus{border-color:var(--gondim-gold)}
+[data-theme="light"] .sort-area{background:rgba(0,0,0,0.04)}
+.sort-info{font-size:.72em;color:var(--text-secondary);margin-top:6px}
+.partes-modal-item{background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-radius:10px;padding:.6rem .9rem;margin-bottom:.4rem}
+[data-theme="light"] .partes-modal-item{background:rgba(0,0,0,0.02)}
+.partes-modal-item .pm-proc{font-weight:600;font-size:.85em;margin-bottom:3px}
+.partes-modal-item .pm-parte{font-size:.76em;color:var(--text-secondary);margin:1px 0;padding-left:8px}
+.partes-modal-item .pm-parte .pm-tag{display:inline-block;font-size:.6em;padding:0 5px;border-radius:5px;margin-right:3px;font-weight:600}
+@media(max-width:640px){
+  .keyval{grid-template-columns:1fr}
+  .partes-grid{grid-template-columns:1fr}
+  .upload-area{padding:1.2rem}
+  .container{padding:1rem .6rem}
+}
+</style>
+</head>
+<body>
+
+<div class="orb" id="orb"></div>
+
+<div class="theme-toggle" id="themeToggle">
+  <span class="theme-icon sun">☀</span>
+  <span class="theme-icon moon">☽</span>
+</div>
+
+<div class="container">
+
+  <div class="logo-container">
+    <img src="logo.png" alt="Logo" class="main-logo">
+  </div>
+
+  <div class="card">
+    <div class="card-title">📂 Carregar dados</div>
+    <div class="upload-row">
+      <div class="upload-area" id="uploadArea">
+        <div class="icon">📄</div>
+        <strong>Planilha</strong>
+        <div class="sub">.xlsx / .xls / .csv</div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      </div>
+      <div class="upload-area small" id="jsonArea">
+        <div class="icon">📥</div>
+        <strong style="font-size:.8em">JSON</strong>
+        <input type="file" id="jsonInput" accept=".json">
+      </div>
+    </div>
+    <div class="actions" id="actionsBar" style="display:none">
+      <button class="btn btn-gold" onclick="exportJSON()">📤 Exportar JSON</button>
+      <button class="btn" onclick="exportCSV()" style="background:rgba(255,255,255,0.06)">📊 Exportar CSV</button>
+      <button class="btn" onclick="exportXLSX()" style="background:rgba(255,255,255,0.06)">📗 Exportar XLSX</button>
+      <button class="btn" onclick="openSortModal()" style="background:rgba(255,255,255,0.06)">🔀 Ordenar</button>
+      <button class="btn btn-danger" onclick="clearAll()">🗑️ Limpar</button>
+      <span class="status-msg" id="statusMsg"></span>
+    </div>
+  </div>
+
+  <div id="filesInfo" class="files-info" style="display:none"></div>
+  <div id="summaryBar" class="summary-bar" style="display:none"></div>
+  <div id="content"></div>
+
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)"></div>
+<div class="modal-window" id="modalWindow">
+  <div class="modal-header">
+    <h2 id="modalTitle">Detalhes</h2>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+  </div>
+  <div class="modal-body" id="modalBody"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════════════════
+function toggleTheme(){
+  const html=document.documentElement;
+  const theme=html.getAttribute('data-theme')==='light'?'dark':'light';
+  html.setAttribute('data-theme',theme);
+  localStorage.setItem('theme',theme);
+}
+function initTheme(){
+  const saved=localStorage.getItem('theme');
+  if(saved)document.documentElement.setAttribute('data-theme',saved);
+}
+document.getElementById('themeToggle').addEventListener('click',toggleTheme);
+initTheme();
+
+// ─── Orb ──────────────────────────────────────────────────
+const orb=document.getElementById('orb');
+document.addEventListener('mousemove',e=>{
+  orb.style.left=e.clientX+'px';
+  orb.style.top=e.clientY+'px';
+});
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function fmtCPF(s){
+  if(!s)return'';
+  let d=s.replace(/\D/g,'');
+  if(d.length===11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+  if(d.length===14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+  return s;
+}
+function fmtMoeda(v){
+  if(v==null||v==='')return'';
+  let n=Number(String(v).replace(',','.'));
+  if(isNaN(n))return String(v);
+  return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtData(d){
+  if(!d)return'';
+  if(typeof d==='object'&&d instanceof Date&&!isNaN(d)){
+    let dateStr=d.toLocaleDateString('pt-BR');
+    let h=d.getHours(), m=d.getMinutes();
+    if(h||m)dateStr+=' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return dateStr;
+  }
+  if(typeof d==='number'){
+    let dd=new Date((d-25569)*86400*1000);
+    let dateStr=dd.toLocaleDateString('pt-BR');
+    let h=dd.getHours(), m=dd.getMinutes();
+    if(h||m)dateStr+=' '+dd.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return dateStr;
+  }
+  let s=String(d);
+  if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){
+    let p=s.split(' ');
+    return p[0]+(p[1]?' '+p[1]:'');
+  }
+  if(s.includes('T')||s.includes('-')){
+    let p=s.replace('T',' ').split('.')[0].split(' ');
+    let dt=p[0]?p[0].split('-').reverse().join('/'):'';
+    let tm=p[1]||'';
+    let parts=tm.split(':');
+    if(parts.length>=2&&parts[0]==='00'&&parts[1]==='00')tm='';
+    return dt+(tm?' '+tm:'');
+  }
+  return s;
+}
+function esc(t){if(!t)return'';return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmtUpper(s){
+  if(!s)return'';
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9\s]/g,'').toUpperCase().trim();
+}
+function fmtCNJ(s){
+  if(!s)return'';
+  let d=String(s).replace(/\D/g,'');
+  if(d.length!==20)return s;
+  return d.slice(0,7)+'-'+d.slice(7,9)+'.'+d.slice(9,13)+'.'+d.slice(13,14)+'.'+d.slice(14,16)+'.'+d.slice(16,20);
+}
+function getProcKey(r){return r['Processo']||r['Número Processo']||r['Número do Processo']||''}
+function parseOrgao(s){
+  if(!s)return{numero:'',comarca:''};
+  let num=(s.match(/^(\d+)[ªº]?/)||[])[1]||'';
+  let resto=s.replace(/^\d+[ªº]?\s*/,'');
+  let comarca='';
+  let m=resto.match(/DA\s+COMARCA\s+(?:DE\s+|DA\s+)?(.+)$/i);
+  if(m) comarca=m[1].trim();
+  else{
+    m=resto.match(/\bDE\s+(.+?)(?:\s+COM\s+|$)/i);
+    if(m) comarca=m[1].trim();
+    else{
+      m=s.match(/\s+-\s+(.+)$/);
+      if(m){
+        let after=m[1].trim();
+        if(/JUIZADO|VARA|JUIZO|TRIBUNAL|COMARCA/i.test(after)){
+          let idx=s.indexOf(' - ');
+          if(idx>=0)comarca=s.substring(0,idx).trim();
+        }else comarca=after;
+      }
+    }
+  }
+  if(comarca)comarca=comarca.split(/\s+[-–—]\s+/)[0].replace(/[,.;:]+$/,'').trim();
+  return{numero:num,comarca};
+}
+
+function extrairComarcaDeTexto(desc){
+  if(!desc)return'';
+  let m=desc.match(/comarca\s+de\s+([\wÀ-ÿ\s]+?)(?:\.|,|\s*$)/i);
+  if(m)return m[1].trim();
+  let ci=desc.search(/\b(JUIZADO|VARA|JUIZO)\b/i);
+  if(ci>=0){
+    let after=desc.slice(ci);
+    let parts=after.split(/\s+DE\s+/i);
+    if(parts.length>=2){
+      let cidade=parts[parts.length-1].replace(/^[\s,.;:]+/,'').replace(/[\s,.;:]+$/,'').trim();
+      if(cidade&&!/^\d/.test(cidade))return cidade.split(/\s+[-–—]\s+/)[0].trim();
+    }
+  }
+  return'';
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAYOUT ADAPTERS
+// ═══════════════════════════════════════════════════════════
+function inferDocType(num){
+  if(!num)return'';
+  let d=num.replace(/\D/g,'');
+  if(d.length===11)return'CPF';
+  if(d.length===14)return'CNPJ';
+  return'';
+}
+function cleanNome(nome){
+  return String(nome).replace(/\s*\(\d{11,14}\)\s*$/,'').trim();
+}
+function extractDocFromNome(nome){
+  let m=String(nome).match(/\((\d{11,14})\)\s*$/);
+  return m?m[1]:'';
+}
+
+function adaptLayout1(fileData){
+  let out={};
+  Object.keys(fileData).forEach(s=>{out[s]=(fileData[s]||[]).map(r=>({...r}))});
+  return out;
+}
+
+function adaptLayout2(fileData){
+  let out={};
+
+  out['Movimentos']=(fileData['Movimentacoes']||[]).map(r=>({
+    Processo:r['Processo']||'',DataHora:r['Data']||'',Descrição:r['Detalhe']||'',Instância:'PRIMEIRO_GRAU'
+  }));
+
+  let gMap=new Map();
+  (fileData['Cabecalho']||[]).forEach(r=>{
+    let k=r['Processo']||'';if(!k)return;
+    let o=gMap.get(k)||{};o['Número Processo']=k;
+    if(r['Valor'])o['Valor Ação']=r['Valor'];
+    if(r['Data Audi'])o['Data Audiência']=r['Data Audi'];
+    if(r['Hr Audi'])o['Hora Audiência']=r['Hr Audi'];
+    if(r['Tipo Audi'])o['Tipo Audiência']=r['Tipo Audi'];
+    if(r['Descrição'])o['Descrição']=r['Descrição'];
+    if(r['Classe'])o['Classe (Descrições)']=r['Classe'];
+    if(r['Assunto'])o['Assunto (Descrições)']=r['Assunto'];
+    if(r['Distribuição'])o['Data Distribuição']=r['Distribuição'];
+    gMap.set(k,o);
+  });
+  (fileData['Dados']||[]).forEach(r=>{
+    let k=r['Processo']||'';if(!k)return;
+    let o=gMap.get(k)||{};o['Número Processo']=k;
+    if(r['Distribuição']&&!o['Data Distribuição'])o['Data Distribuição']=r['Distribuição'];
+    if(r['OrgaoJulgador'])o['Órgão Julgador (Nome)']=r['OrgaoJulgador'];
+    if(r['Comarca'])o['Comarca']=r['Comarca'];
+    if(r['Tutela'])o['Liminar']=r['Tutela'];
+    if(r['Eletronico'])o['Eletrônico']=r['Eletronico'];
+    if(r['ValorCausa']&&!o['Valor Ação'])o['Valor Ação']=r['ValorCausa'];
+    if(r['DataAud']&&!o['Data Audiência'])o['Data Audiência']=r['DataAud'];
+    if(r['HoraAud']&&!o['Hora Audiência'])o['Hora Audiência']=r['HoraAud'];
+    if(r['TipoAud']&&!o['Tipo Audiência'])o['Tipo Audiência']=r['TipoAud'];
+    if(r['Assuntos']&&!o['Assunto (Descrições)'])o['Assunto (Descrições)']=r['Assuntos'];
+    gMap.set(k,o);
+  });
+  out['Dados Gerais']=Array.from(gMap.values());
+
+  let partes=[];
+  (fileData['Personagem']||[]).forEach(r=>{
+    let proc=r['Processo']||'';if(!proc)return;
+    let poloRaw=r['TipoPolo']||'';
+    let polo=poloRaw==='AT'?'ATIVO':(poloRaw==='PA'?'PASSIVO':poloRaw);
+    let nomeRaw=r['Nome']||'';
+    let numDoc=r['NumeroDocumentoPrincipal']||'';
+    if(!numDoc)numDoc=extractDocFromNome(nomeRaw);
+    let nome=numDoc?cleanNome(nomeRaw):nomeRaw;
+    let tipoDoc=inferDocType(numDoc);
+    let tipoPessoa=r['TipoRepresentante']||'';
+    if(tipoPessoa==='fisica')tipoPessoa='FISICA';
+    else if(tipoPessoa==='juridica')tipoPessoa='JURIDICA';
+    else if(tipoDoc==='CPF')tipoPessoa=tipoPessoa||'FISICA';
+    else if(tipoDoc==='CNPJ')tipoPessoa=tipoPessoa||'JURIDICA';
+    partes.push({
+      Processo:proc,Polo:polo,'Tipo de Parte':polo==='ATIVO'?'AUTOR':'RÉU',
+      'Tipo de Pessoa':tipoPessoa,Nome:nome,'Tipo de Documento':tipoDoc,
+      'Número do Documento':numDoc,'Nome Advogado 1':'','OAB Advogado 1':'','CPF Advogado 1':'',
+      'Nome Advogado 2':'','OAB Advogado 2':'','CPF Advogado 2':'','Inscricao':r['Inscricao']||''
+    });
+  });
+  out['Partes']=partes;
+
+  let taMap=new Map();
+  (fileData['Dados']||[]).forEach(r=>{
+    let k=r['Processo']||'';if(!k)return;
+    taMap.set(k,{
+      Processo:k,Instância:'PRIMEIRO_GRAU',Liminar:r['Tutela']||'',Ativo:'Sim',
+      'Valor Ação':r['ValorCausa']||'','Data Distribuição':r['Distribuição']||'',
+      'Classe (Descrições)':fileData['Cabecalho']?.find(c=>c['Processo']===k)?.['Classe']||'',
+      'Assunto (Descrições)':r['Assuntos']||''
+    });
+  });
+  out['Tramitacao Atual']=Array.from(taMap.values());
+
+  let trMap=new Map();
+  (fileData['Cabecalho']||[]).forEach(r=>{
+    let k=r['Processo']||'';if(!k)return;
+    trMap.set(k,{
+      Processo:k,'Classe (Descrições)':r['Classe']||'','Assunto (Descrições)':r['Assunto']||'',
+      'Valor Ação':r['Valor']||'','Data Hora Última Distribuição':r['Distribuição']||'',
+      'Órgão Julgador Nome':fileData['Dados']?.find(d=>d['Processo']===k)?.['OrgaoJulgador']||''
+    });
+  });
+  out['Tramitacoes']=Array.from(trMap.values());
+
+  return out;
+}
+
+function adaptLayout3(fileData){
+  let out={};
+  const rows=fileData['Plan1']||[];
+  const isHeader=r=>{
+    let p=r['Núm. Processo']||r['N. Processo CNJ']||'';
+    return p==='Núm. Processo'||p==='N. Processo CNJ';
+  };
+  const mapOrgao={'JEC':'JUIZADO ESPECIAL CIVEL','JECRIM':'JUIZADO ESPECIAL CRIMINAL','VARA':'VARA','TR':'TRIBUNAL'};
+
+  let dg=rows.filter(r=>!isHeader(r)).map(r=>{
+    let proc=r['Núm. Processo']||r['N. Processo CNJ']||'';
+    let orgaoNum=r['Num']||'';
+    let orgaoSigla=r['Órgão']||'';
+    let comarca=r['Comarca']||'';
+    let orgaoNome=mapOrgao[orgaoSigla]||orgaoSigla;
+    let orgaoJulgador='';
+    if(orgaoNum&&orgaoNome&&comarca)orgaoJulgador=`${orgaoNum}ª ${orgaoNome} DA COMARCA DE ${comarca}`;
+    let cpfAutor=String(r['CPFAUTOR']||'').replace(/\D/g,'');
+    return{
+      'Número Processo':proc,'Valor Ação':r['Valor da Causa'],
+      'Data Distribuição':String(r['Distribuição']||''),
+      'Comarca':comarca,'Órgão Julgador (Nome)':orgaoJulgador,
+      'Eletrônico':r['Eletrônico'],'Liminar':r['Tutela Deferida'],
+      'Data Audiência':r['Data Audiencia'],'Hora Audiência':r['Hora Audicencia'],
+      'Tipo Audiência':r['Tipo Audiencia'],
+      'Descrição':r['Resumo da Causa']||r['Síntese da Demanda'],
+      'Sigla Tribunal':r['UF']?'TJ'+r['UF']:''
+    };
+  }).filter(r=>r['Número Processo']);
+  out['Dados Gerais']=dg;
+
+  let partes=[];
+  rows.forEach(r=>{
+    let proc=r['Núm. Processo']||r['N. Processo CNJ']||'';
+    if(!proc)return;
+    let autorNome=r['Parte Autora']||'';
+    let autorCpf=String(r['CPFAUTOR']||'').replace(/\D/g,'');
+    if(autorNome){
+      partes.push({
+        Processo:proc,Polo:'ATIVO','Tipo de Parte':'AUTOR','Tipo de Pessoa':'FISICA',
+        Nome:autorNome,'Tipo de Documento':autorCpf?'CPF':'',
+        'Número do Documento':autorCpf,'Nome Advogado 1':'','OAB Advogado 1':'','CPF Advogado 1':''
+      });
+    }
+    let reuNome=r['Parte Ré']||'';
+    if(reuNome){
+      partes.push({
+        Processo:proc,Polo:'PASSIVO','Tipo de Parte':'RÉU','Tipo de Pessoa':'',
+        Nome:reuNome,'Tipo de Documento':'','Número do Documento':'',
+        'Nome Advogado 1':r['Advogado do Réu']||'','OAB Advogado 1':'','CPF Advogado 1':''
+      });
+    }
+  });
+  out['Partes']=partes;
+  return out;
+}
+
+function toDateBR(d){
+  if(!d)return'';
+  if(typeof d==='object'&&d instanceof Date&&!isNaN(d))
+    return d.toLocaleDateString('pt-BR');
+  let s=String(d).trim();
+  if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){
+    let p=s.split(' ')[0].split('/');
+    let a=parseInt(p[0]), b=parseInt(p[1]);
+    if(b>12)return String(b).padStart(2,'0')+'/'+String(a).padStart(2,'0')+'/'+p[2];
+    return String(a).padStart(2,'0')+'/'+String(b).padStart(2,'0')+'/'+p[2];
+  }
+  let m=s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+  if(m)return m[3]+'/'+m[2]+'/'+m[1];
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+  if(m){
+    let a=parseInt(m[1]), b=parseInt(m[2]), y=m[3];
+    if(y.length===2)y='20'+y;
+    return String(b).padStart(2,'0')+'/'+String(a).padStart(2,'0')+'/'+y;
+  }
+  return s;
+}
+
+function adaptLayoutBenner(fileData){
+  let out={};
+  const rows=fileData['Planilha1']||[];
+
+  let dg=rows.map(r=>{
+    let proc=r['Número']||r['Numero']||'';
+    let comarca=r['Comarca']||'';
+    let uf=r['Uf']||r['UF']||'';
+    let orgao=r['Órgão']||r['Orgao']||r['Orgão']||'';
+    let juizo=r['Juízo']||r['Juizo']||'';
+    let rito=r['Rito']||'';
+
+    let juizoStr=String(juizo);
+    let ritoStr=String(rito);
+    let orgaoStr=String(orgao);
+
+    let numMatch=juizoStr.match(/^(\d+)[ªº]?/);
+    let orgaoNum=numMatch?numMatch[1]:'';
+
+    if(!numMatch){
+      let isJuizado=/^JEC/i.test(orgaoStr)||/^JECRIM/i.test(orgaoStr)||
+                   /juizado/i.test(juizoStr)||/juizado/i.test(ritoStr);
+      if(isJuizado)orgaoNum='0';
+      else if(/^VARA/i.test(orgaoStr)||/vara/i.test(juizoStr))orgaoNum='1';
+    }
+
+    let orgaoBase=orgao||juizoStr.replace(/^\d+[ªº]?\s*/,'')||rito||'';
+    let orgaoJulgador='';
+    if(orgaoNum&&orgaoBase&&comarca)orgaoJulgador=`${orgaoNum}ª ${orgaoBase} DA COMARCA DE ${comarca}`;
+    else if(orgaoBase&&comarca)orgaoJulgador=`${orgaoBase} DA COMARCA DE ${comarca}`;
+
+    return{
+      'Número Processo':proc,
+      'Valor Ação':String(r['V. Causa']||r['Valor Causa']||'').replace(/\./g,'').replace(',','.'),
+      'Data Distribuição':toDateBR(r['Data Ajuiz.']||r['Data Ajuizamento']||''),
+      'Comarca':comarca,
+      'Órgão Julgador (Nome)':orgaoJulgador,
+      'Eletrônico':'',
+      'Liminar':'',
+      'Data Audiência':'',
+      'Hora Audiência':'',
+      'Tipo Audiência':'',
+      'Descrição':r['Objeto Padrão']||r['Assunto']||'',
+      'Sigla Tribunal':uf?'TJ'+uf:'',
+      'Classe (Descrições)':r['Tipo De Ação']||r['Tipo de Ação']||'',
+      'Assunto (Descrições)':r['Assunto']||'',
+      'Sigilo':'','Ativo':'','Permite Peticionar':''
+    };
+  }).filter(r=>r['Número Processo']);
+  out['Dados Gerais']=dg;
+
+  let partes=[];
+  rows.forEach(r=>{
+    let proc=r['Número']||r['Numero']||'';
+    if(!proc)return;
+
+    let condAdversa=r['Cond Adversa']||'';
+    let isAutor=condAdversa==='Autor'||condAdversa==='AUTOR';
+    let cliente=r['Coligada']||'';
+    let nomeAdverso=r['Parte Adversa']||'';
+    let docAdverso=String(r['Cpf/Cnpj (Adversa)']||r['CPF/CNPJ (Adversa)']||'').replace(/\D/g,'');
+
+    if(cliente){
+      partes.push({
+        Processo:proc,Polo:isAutor?'PASSIVO':'ATIVO','Tipo de Parte':isAutor?'RÉU':'AUTOR',
+        'Tipo de Pessoa':'JURIDICA',Nome:cliente,'Tipo de Documento':'','Número do Documento':'',
+        'Nome Advogado 1':'','OAB Advogado 1':'','CPF Advogado 1':'','Inscricao':''
+      });
+    }
+
+    if(nomeAdverso){
+      let tipoDoc=docAdverso.length>11?'CNPJ':'CPF';
+      let tipoPessoa=tipoDoc==='CPF'?'FISICA':'JURIDICA';
+      partes.push({
+        Processo:proc,Polo:isAutor?'ATIVO':'PASSIVO','Tipo de Parte':isAutor?'AUTOR':'RÉU',
+        'Tipo de Pessoa':tipoPessoa,Nome:nomeAdverso,'Tipo de Documento':tipoDoc,
+        'Número do Documento':docAdverso,'Nome Advogado 1':r['Adv Adverso']||'',
+        'OAB Advogado 1':'','CPF Advogado 1':'','Inscricao':''
+      });
+    }
+  });
+  out['Partes']=partes;
+
+  return out;
+}
+
+function parseOrgaoEnvio(s){
+  if(!s)return{numero:'',tipo:'',comarca:'',uf:''};
+  let parts=s.split('/');
+  if(parts.length<3)return{numero:'',tipo:s,comarca:'',uf:''};
+  let uf=parts.pop();
+  let comarca=parts.pop();
+  let prefix=parts.join('/');
+  let tokens=prefix.trim().split(/\s+/);
+  let numero='',tipo='';
+  let arabic=tokens[0].match(/^\d+$/);
+  if(arabic){
+    numero=arabic[0];
+    tipo=tokens.slice(1).join(' ');
+  }else{
+    let roman={I:1,II:2,III:3,IV:4,V:5,VI:6,VII:7,VIII:8,IX:9,X:10,XX:20};
+    let up=tokens[0].toUpperCase();
+    if(roman[up]!==undefined){
+      numero=String(roman[up]);
+      tipo=tokens.slice(1).join(' ');
+    }else{
+      tipo=tokens.join(' ');
+    }
+  }
+  return{numero,tipo,comarca,uf};
+}
+
+function adaptLayoutEnvioEmail(fileData){
+  let out={};
+  const rows=fileData['Planilha1']||[];
+
+  let dg=rows.map(r=>{
+    let proc=fmtCNJ(String(r['PROCESSO_JUDICIAL']||''));
+    let dataAud=toDateBR(r['DATA_AUDIENCIA']||'');
+    let parsed=parseOrgaoEnvio(r['ORGAO_JULGADOR']||'');
+
+    let orgaoJulgador='';
+    if(parsed.numero&&parsed.tipo&&parsed.comarca)orgaoJulgador=`${parsed.numero}ª ${parsed.tipo} DA COMARCA DE ${parsed.comarca}`;
+    else if(parsed.tipo&&parsed.comarca)orgaoJulgador=`${parsed.tipo} DA COMARCA DE ${parsed.comarca}`;
+    else orgaoJulgador=r['ORGAO_JULGADOR']||'';
+
+    return{
+      'Número Processo':proc,
+      'Data Distribuição':'',
+      'Comarca':parsed.comarca,
+      'Órgão Julgador (Nome)':orgaoJulgador,
+      'Valor Ação':'',
+      'Eletrônico':'',
+      'Liminar':'',
+      'Data Audiência':dataAud,
+      'Hora Audiência':'',
+      'Tipo Audiência':'',
+      'Descrição':'',
+      'Sigla Tribunal':parsed.uf?'TJ'+parsed.uf:'',
+      'Classe (Descrições)':'',
+      'Assunto (Descrições)':'',
+      'Sigilo':'','Ativo':'','Permite Peticionar':''
+    };
+  }).filter(r=>r['Número Processo']);
+  out['Dados Gerais']=dg;
+
+  let partes=[];
+  rows.forEach(r=>{
+    let proc=fmtCNJ(String(r['PROCESSO_JUDICIAL']||''));
+    if(!proc)return;
+
+    let envolvido=String(r['ENVOLVIDO']||'').trim();
+    if(!envolvido||/OAB|^\d{7,}/i.test(envolvido))return;
+
+    partes.push({
+      Processo:proc,Polo:'ATIVO','Tipo de Parte':'AUTOR',
+      'Tipo de Pessoa':/LTDA|EIRELLI|ME\s*$|S\s*[.\/]?\s*A\.?\s*$/i.test(envolvido)?'JURIDICA':'FISICA',
+      Nome:envolvido,'Tipo de Documento':'','Número do Documento':'',
+      'Nome Advogado 1':'','OAB Advogado 1':'','CPF Advogado 1':'','Inscricao':''
+    });
+  });
+  out['Partes']=partes;
+
+  return out;
+}
+
+const LAYOUTS=[
+  {name:'Layout Padrão',test:(s,d)=>s.includes('Dados Gerais')||s.includes('Partes'),adapt:adaptLayout1},
+  {name:'Layout Personagem',test:(s,d)=>s.includes('Movimentacoes')||s.includes('Personagem'),adapt:adaptLayout2},
+  {name:'Layout Benner',test:(s,d)=>s.includes('Planilha1')&&(!d['Planilha1']||!d['Planilha1'][0]||!d['Planilha1'][0]['PROCESSO_JUDICIAL']),adapt:adaptLayoutBenner},
+  {name:'Layout Envio Email',test:(s,d)=>s.includes('Planilha1')&&d['Planilha1']&&d['Planilha1'][0]&&d['Planilha1'][0]['PROCESSO_JUDICIAL'],adapt:adaptLayoutEnvioEmail},
+  {name:'Layout Planilha',test:(s,d)=>s.includes('Plan1'),adapt:adaptLayout3}
+];
+
+function detectAndAdapt(fileData){
+  let sheets=Object.keys(fileData);
+  for(let L of LAYOUTS){if(L.test(sheets,fileData))return{layout:L.name,data:L.adapt(fileData)};}
+  return{layout:'Bruto',data:adaptLayout1(fileData)};
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE & MERGE
+// ═══════════════════════════════════════════════════════════
+let allData={};
+let loadedFiles=[];
+let fileCount=0;
+let customOrder=null;
+let resolvedConflicts={};
+
+const SINGLE_KEYS=new Set(['Dados Gerais','Tramitacao Atual']);
+const MULTI_KEYS={
+  Partes:['Processo','Tipo de Documento','Número do Documento'],
+  Documentos:['Processo','Sequência'],
+  Movimentos:['Processo','DataHora','Descrição'],
+  Distribuicao:['Processo','DataHora'],
+  Tramitacoes:['Processo','ID Codex']
+};
+
+function mergeCanonical(canonData){
+  Object.keys(canonData).forEach(sheet=>{
+    let rows=canonData[sheet];
+    if(!Array.isArray(rows)||!rows.length)return;
+    if(SINGLE_KEYS.has(sheet)){
+      // Keep ALL rows to detect conflicts later
+      allData[sheet]=(allData[sheet]||[]).concat(rows);
+    } else if(MULTI_KEYS[sheet]){
+      let fields=MULTI_KEYS[sheet];
+      let seen=new Set();
+      let merged=[...(allData[sheet]||[])];
+      merged.forEach(r=>seen.add(fields.map(f=>r[f]??'').join('|||')));
+      rows.forEach(r=>{
+        let k=fields.map(f=>r[f]??'').join('|||');
+        if(!seen.has(k)){seen.add(k);merged.push(r);}
+      });
+      allData[sheet]=merged;
+    } else {
+      allData[sheet]=(allData[sheet]||[]).concat(rows);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// FILE LOADING
+// ═══════════════════════════════════════════════════════════
+function loadExcelFile(file){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array',cellDates:true,dateNF:'yyyy-mm-dd hh:mm:ss'});
+      let fileData={};
+      wb.SheetNames.forEach(name=>{
+        const ws=wb.Sheets[name];
+        fileData[name]=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+      });
+      processFileData(fileData, file.name);
+    }catch(err){setStatus('❌ '+err.message,true);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadJSONFile(file){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      if(typeof data!=='object')throw new Error('JSON inválido');
+      // New format: full export with allData, customOrder, resolvedConflicts
+      if(data.allData&&typeof data.allData==='object'&&!Array.isArray(data.allData)){
+        allData={};
+        let count=0;
+        Object.keys(data.allData).forEach(s=>{allData[s]=(data.allData[s]||[]).map(r=>({...r}));count+=(data.allData[s]||[]).length;});
+        if(count===0)throw new Error('JSON vazio');
+        if(data.customOrder)customOrder=data.customOrder;
+        if(data.resolvedConflicts)Object.assign(resolvedConflicts,data.resolvedConflicts);
+        fileCount++;
+        loadedFiles.push({name:file.name,layout:'JSON'});
+        renderAll();
+        updateUI();
+        saveState();
+        setStatus('✅ '+file.name+' (JSON)');
+      }else{
+        processFileData(data, file.name);
+      }
+    }catch(err){console.error('JSON import error:',err);alert('❌ '+err.message);setStatus('❌ '+err.message,true);}
+  };
+  reader.onerror=function(){alert('❌ Erro ao ler arquivo');setStatus('❌ Erro ao ler arquivo',true);};
+  reader.readAsText(file);
+}
+
+function processFileData(fileData, fileName){
+  fileCount++;
+  let{layout,data:canonData}=detectAndAdapt(fileData);
+  loadedFiles.push({name:fileName,layout});
+  mergeCanonical(canonData);
+  renderAll();
+  updateUI();
+  saveState();
+  setStatus('✅ '+fileName+' ('+layout+')');
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════
+function normVal(v){
+  if(v==null)return'';
+  let s=String(v).trim();
+  let l=s.toLowerCase();
+  if(l==='true'||l==='false')return l;
+  // Remove acentos (NFD) e marcadores ordinais
+  s=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/(\d+)[ªº]/g,'$1');
+  // Sanitiza nomes de empresas: remove pontuação e normaliza sufixos societários
+  s=s.replace(/[()\[\]{}]/g,' ');
+  s=s.replace(/\s+S\s*[.\/]?\s*A\.?\s*$/gi,'');
+  s=s.replace(/\s+LTDA\.?\s*$/gi,'');
+  s=s.replace(/\s+EIRELI\s*$/gi,'');
+  s=s.replace(/\s+ME\s*$/gi,'');
+  s=s.replace(/\s+/g,' ').trim();
+  if(s.includes(',')){
+    s=s.replace(/\./g,'');
+  }else if(s.includes('.')){
+    s=s.replace('.',',');
+  }
+  // normaliza datas: desambigua US (m/d/a) vs BR (d/m/a)
+  let dm=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(dm){
+    let a=parseInt(dm[1]),b=parseInt(dm[2]),y=dm[3];
+    let ano4=y.length===4?y:'20'+y;
+    let dia,mes;
+    if(a>12){dia=a;mes=b;}
+    else if(b>12){dia=b;mes=a;}
+    else if(y.length===2){dia=b;mes=a;} // ano 2 dígitos → SheetJS → US
+    else{dia=a;mes=b;} // ano 4 dígitos → BR
+    return ano4+'-'+String(mes).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+  }
+  let is=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(is)return is[1]+'-'+is[2]+'-'+is[3];
+  // normaliza hora: H:MM → HH:MM
+  let tm=s.match(/^(\d{1,2}):(\d{2})$/);
+  if(tm)return String(tm[1]).padStart(2,'0')+':'+tm[2];
+  return s.toLowerCase().trim();
+}
+
+function mergeField(field, vals, resolvedValue, conflitos){
+  if(resolvedValue!=null)return resolvedValue;
+  if(!vals.length)return;
+  if(field==='Descrição'){
+    let relevantes=vals.filter(v=>!/^[.\s\-–—]+$/.test(String(v)));
+    if(relevantes.length)vals=relevantes;
+  }
+  let uniq=[...new Set(vals.map(v=>normVal(v)))];
+  if(!uniq.length)return;
+  if(uniq.length===1)return vals[0];
+  if(field==='Descrição')return vals.join(' | ');
+  if(conflitos)conflitos[field]=[...new Set(vals.map(v=>String(v)))];
+  return vals[0];
+}
+
+function renderAll(){
+  const SKIP_CONFLITO=new Set(['Liminar']);
+  const erros=allData['Erros']||[];
+  const processos={};
+  const allProcKeys=new Set();
+
+  ['Dados Gerais','Partes','Distribuicao','Tramitacao Atual','Tramitacoes','Movimentos','Documentos'].forEach(s=>{
+    (allData[s]||[]).forEach(r=>{let k=getProcKey(r);if(k)allProcKeys.add(k);});
+  });
+
+  allProcKeys.forEach(k=>{processos[k]={}});
+
+  if(allData['Dados Gerais']){
+    let gPorProc={};
+    allData['Dados Gerais'].forEach(r=>{
+      let k=r['Número Processo']||r['Processo']||'';
+      if(!k||!processos[k])return;
+      if(!gPorProc[k])gPorProc[k]=[];
+      gPorProc[k].push(r);
+    });
+    Object.entries(gPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={}, conflitos={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        if(SKIP_CONFLITO.has(f)){merged[f]=rows[rows.length-1][f];return;}
+        let rk=k+'||'+f;
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        let fnorm=normVal(f);
+        vals=vals.filter(v=>normVal(v)!==fnorm);
+        let mv=mergeField(f,vals,resolvedConflicts[rk],conflitos);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].gerais=merged;
+      if(Object.keys(conflitos).length)processos[k].geraisConflitos=conflitos;
+    });
+  }
+  // Copia Órgão Julgador da Distribuição pra Dados Gerais se ausente
+  if(allData['Distribuicao']){
+    (allData['Distribuicao']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;
+      if(g&&!g['Órgão Julgador (Nome)']&&r['Órgão Julgador (Nome)'])
+        g['Órgão Julgador (Nome)']=r['Órgão Julgador (Nome)'];
+    });
+  }
+  // Fallback: extrai comarca de movimentos/descrições
+  if(allData['Movimentos']){
+    (allData['Movimentos']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;if(!g)return;
+      let desc=r['Descrição']||r['Detalhe']||'';
+      let cidade=extrairComarcaDeTexto(desc);
+      if(cidade&&!parseOrgao(g['Órgão Julgador (Nome)']||'').comarca&&!parseOrgao(g['Órgão Julgador (Nome)']||'').numero)
+        g['Órgão Julgador (Nome)']=' - '+cidade;
+    });
+  }
+  if(allData['Distribuicao']){
+    (allData['Distribuicao']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!processos[k].distribuicoes)processos[k].distribuicoes=[];
+      processos[k].distribuicoes.push(r);
+    });
+  }
+  if(allData['Partes']){
+    let pp={};
+    (allData['Partes']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!pp[k])pp[k]=[];
+      pp[k].push(r);
+    });
+    Object.entries(pp).forEach(([k,rows])=>{
+      let grupos=new Map();
+      rows.forEach(r=>{
+        let nn=r['Nome']?normVal(r['Nome']):'';
+        let polo=r['Polo']||'';
+        let chave=nn+'|'+polo;
+        if(!grupos.has(chave))grupos.set(chave,[]);
+        grupos.get(chave).push(r);
+      });
+      let merged=[];
+      grupos.forEach(g=>{
+        if(g.length===1){merged.push(g[0]);return;}
+        let base={...g[0]};
+        g.slice(1).forEach(r=>{
+          Object.keys(r).forEach(f=>{
+            if(base[f]==null||base[f]==='')base[f]=r[f];
+          });
+        });
+        merged.push(base);
+      });
+      processos[k].partes=merged;
+    });
+  }
+  if(allData['Tramitacao Atual']){
+    let taPorProc={};
+    (allData['Tramitacao Atual']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!taPorProc[k])taPorProc[k]=[];
+      taPorProc[k].push(r);
+    });
+    Object.entries(taPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={}, conflitos={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        if(SKIP_CONFLITO.has(f)){merged[f]=rows[rows.length-1][f];return;}
+        let rk='ta_'+k+'||'+f;
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        let mv=mergeField(f,vals,resolvedConflicts[rk],conflitos);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].tramitacaoAtual=merged;
+      if(Object.keys(conflitos).length)processos[k].taConflitos=conflitos;
+    });
+  }
+  if(allData['Tramitacoes']){
+    (allData['Tramitacoes']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!processos[k].tramitacoes)processos[k].tramitacoes=[];
+      processos[k].tramitacoes.push(r);
+    });
+  }
+  if(allData['Movimentos']){
+    (allData['Movimentos']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!processos[k].movimentos)processos[k].movimentos=[];
+      processos[k].movimentos.push(r);
+    });
+  }
+  if(allData['Documentos']){
+    (allData['Documentos']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!processos[k].documentos)processos[k].documentos=[];
+      processos[k].documentos.push(r);
+    });
+  }
+
+  const errosFiltrados=erros.filter(e=>!allProcKeys.has(e['Número Processo']||''));
+
+  document.getElementById('summaryBar').style.display='flex';
+  document.getElementById('actionsBar').style.display='flex';
+
+  const total=Object.keys(processos).length;
+  const totalDoc=Object.values(processos).reduce((a,p)=>a+(p.documentos||[]).length,0);
+  const totalMov=Object.values(processos).reduce((a,p)=>a+(p.movimentos||[]).length,0);
+  const totalPart=Object.values(processos).reduce((a,p)=>a+(p.partes||[]).length,0);
+  const totalConf=Object.values(processos).filter(p=>p.geraisConflitos||p.taConflitos).length;
+  const confData=Object.entries(processos).filter(([,p])=>p.geraisConflitos||p.taConflitos).map(([num,p])=>({numero:num,gerais:p.geraisConflitos||{},ta:p.taConflitos||{}}));
+  window.__confData=confData;
+  window.__erroData=errosFiltrados;
+  window.__partesData=Object.entries(processos).filter(([,p])=>(p.partes||[]).length).map(([num,p])=>({numero:num,partes:p.partes}));
+
+  document.getElementById('summaryBar').innerHTML=
+    `<div class="summary-card"><div class="num">${total}</div><div class="label">Processos</div></div>`+
+    (totalPart?`<div class="summary-card summary-card-cursor" onclick="openPartesModal()"><div class="num">${totalPart}</div><div class="label">Partes</div></div>`:`<div class="summary-card"><div class="num">0</div><div class="label">Partes</div></div>`)+
+    `<div class="summary-card"><div class="num">${totalDoc}</div><div class="label">Documentos</div></div>`+
+    `<div class="summary-card"><div class="num">${totalMov}</div><div class="label">Movimentos</div></div>`+
+    (totalConf?`<div class="summary-card summary-card-cursor" onclick="openConfModal()"><div class="num" style="color:var(--warning)">${totalConf}</div><div class="label">⚠ Conflitos</div></div>`:'')+
+    (errosFiltrados.length?`<div class="summary-card summary-card-cursor" onclick="openErroModal()"><div class="num" style="color:var(--danger)">${errosFiltrados.length}</div><div class="label">⚠ Erros</div></div>`:`<div class="summary-card"><div class="num" style="color:var(--gondim-gold)">0</div><div class="label">Erros</div></div>`);
+
+  let html='<div class="processos">';
+  let sortedKeys;
+  if(customOrder&&customOrder.length){
+    let ordem=new Map(customOrder.map((n,i)=>[n,i]));
+    let emLista=[], foraLista=[];
+    allProcKeys.forEach(n=>{
+      if(ordem.has(n))emLista.push(n);
+      else foraLista.push(n);
+    });
+    emLista.sort((a,b)=>ordem.get(a)-ordem.get(b));
+    foraLista.sort();
+    sortedKeys=[...emLista,...foraLista];
+  }else{
+    sortedKeys=Array.from(allProcKeys).sort();
+  }
+
+  sortedKeys.forEach(numero=>{
+    const p=processos[numero];
+    const g=p.gerais||{};
+    const ta=p.tramitacaoAtual||{};
+    const partes=p.partes||[];
+    const docs=p.documentos||[];
+    const movs=p.movimentos||[];
+    const dists=p.distribuicoes||[];
+    const trams=p.tramitacoes||[];
+
+    const valor=g['Valor Ação']||ta['Valor Ação']||'';
+    const tribunal=g['Tribunal Nome']||g['Sigla Tribunal']||g['Comarca']||'';
+    const classe=ta['Classe (Descrições)']||g['Classe (Descrições)']||'';
+    const ativo=g['Ativo']||'Sim';
+
+    html+=`<div class="processo">
+      <div class="processo-header" onclick="toggleProc(this)">
+        <div>
+          <div class="numero">${esc(numero)}</div>
+          <div style="font-size:.68em;opacity:.6;margin-top:1px">
+            ${esc(tribunal?tribunal.substring(0,60):'')}${classe?' · '+esc(classe.substring(0,40)):''}${valor?' · R$ '+fmtMoeda(valor):''}
+          </div>
+        </div>
+        <div>
+          <span style="font-size:.62em;background:rgba(255,215,0,0.15);color:var(--gondim-gold);padding:2px 8px;border-radius:8px;margin-right:6px">${esc(ativo)}</span>
+          <span class="toggle">▾</span>
+        </div>
+      </div>
+      <div class="processo-body">`;
+
+    if(Object.keys(g).length){
+      const conflitos=p.geraisConflitos||{};
+      html+=`<div><div class="section-title">📋 Dados Gerais</div><div class="keyval">`;
+      [
+        ['Nível Sigilo','Sigilo'],['Sigla Tribunal','Tribunal'],['Tribunal Nome',''],
+        ['Tribunal Segmento','Segmento'],['Tribunal JTR','JTR'],
+        ['Valor Ação','Valor da Ação'],['Ativo','Ativo'],
+        ['Permite Peticionar','Permite Peticionar'],
+        ['Comarca','Comarca','rawComarca'],
+        ['Órgão Julgador (Nome)','Órgão Julgador','parseOrgao'],
+        ['Data Distribuição','Data Distribuição'],['Liminar','Liminar'],['Eletrônico','Eletrônico'],
+        ['Data Audiência','Audiência'],['Hora Audiência',''],['Tipo Audiência',''],
+        ['Descrição','Descrição']
+      ].forEach(([key,label,opt])=>{
+        let conflito=conflitos[key];
+        if(g[key]&&g[key]!==''){
+          let v=g[key];
+          if(key==='Valor Ação')v='R$ '+fmtMoeda(v);
+          else if(key==='Data Audiência'||key==='Data Distribuição')v=fmtData(v);
+          if(opt==='parseOrgao'){
+            let p=parseOrgao(v);
+            if(p.numero)html+=`<span class="k">Nº Órgão</span><span class="v">${esc(p.numero)}</span>`;
+            if(p.comarca)html+=`<span class="k">Comarca</span><span class="v">${esc(fmtUpper(p.comarca))}</span>`;
+            return;
+          }
+          if(opt==='rawComarca'&&/JUIZADO|VARA|JUIZO|TRIBUNAL/i.test(v))return;
+          if(conflito){
+            let vals=conflito.map(cv=>{
+              if(key==='Valor Ação')return 'R$ '+fmtMoeda(cv);
+              if(key==='Data Audiência'||key==='Data Distribuição')return fmtData(cv);
+              return cv;
+            });
+            html+=`<span class="k"><span class="conflito-dot">⚠</span> ${esc(label||key)}</span>
+              <span class="v conflito-vals">${vals.map((cv,i)=>`<span class="conflito-val">${esc(cv)}${i<vals.length-1?' <span class="conflito-vs">vs</span> ':''}</span>`).join('')}</span>`;
+          } else {
+            html+=`<span class="k">${esc(label||key)}</span><span class="v">${esc(v)}</span>`;
+          }
+        } else if(conflito){
+          let vals=conflito.map(cv=>{
+            if(key==='Valor Ação')return 'R$ '+fmtMoeda(cv);
+            if(key==='Data Audiência'||key==='Data Distribuição')return fmtData(cv);
+            return cv;
+          });
+          html+=`<span class="k"><span class="conflito-dot">⚠</span> ${esc(label||key)}</span>
+            <span class="v conflito-vals">${vals.map((cv,i)=>`<span class="conflito-val">${esc(cv)}${i<vals.length-1?' <span class="conflito-vs">vs</span> ':''}</span>`).join('')}</span>`;
+        }
+      });
+      html+=`</div></div>`;
+    }
+
+    if(Object.keys(ta).length){
+      const taConf=p.taConflitos||{};
+      html+=`<div><div class="section-title">🔄 Tramitação Atual</div><div class="keyval">`;
+      const taFields=[['Instância','Instância'],['Classe (Descrições)','Classe'],['Assunto (Descrições)','Assunto'],['Data Distribuição','Data Distribuição']];
+      taFields.forEach(([key,label])=>{
+        let conflito=taConf[key];
+        if(ta[key]&&ta[key]!==''){
+          let v=key==='Data Distribuição'?fmtData(ta[key]):ta[key];
+          if(conflito){
+            let vals=conflito.map(cv=>key==='Data Distribuição'?fmtData(cv):cv);
+            html+=`<span class="k"><span class="conflito-dot">⚠</span> ${esc(label)}</span>
+              <span class="v conflito-vals">${vals.map((cv,i)=>`<span class="conflito-val">${esc(cv)}${i<vals.length-1?' <span class="conflito-vs">vs</span> ':''}</span>`).join('')}</span>`;
+          } else {
+            html+=`<span class="k">${esc(label)}</span><span class="v">${esc(v)}</span>`;
+          }
+        } else if(conflito){
+          let vals=conflito.map(cv=>key==='Data Distribuição'?fmtData(cv):cv);
+          html+=`<span class="k"><span class="conflito-dot">⚠</span> ${esc(label)}</span>
+            <span class="v conflito-vals">${vals.map((cv,i)=>`<span class="conflito-val">${esc(cv)}${i<vals.length-1?' <span class="conflito-vs">vs</span> ':''}</span>`).join('')}</span>`;
+        }
+      });
+      if(ta['Valor Ação']&&!g['Valor Ação']){
+        let v='R$ '+fmtMoeda(ta['Valor Ação']);
+        if(taConf['Valor Ação']){
+          let vals=taConf['Valor Ação'].map(cv=>'R$ '+fmtMoeda(cv));
+          html+=`<span class="k"><span class="conflito-dot">⚠</span> Valor da Ação</span>
+            <span class="v conflito-vals">${vals.map((cv,i)=>`<span class="conflito-val">${esc(cv)}${i<vals.length-1?' <span class="conflito-vs">vs</span> ':''}</span>`).join('')}</span>`;
+        } else {
+          html+=`<span class="k">Valor da Ação</span><span class="v">${v}</span>`;
+        }
+      }
+      html+=`</div></div>`;
+    }
+
+    if(partes.length){
+      html+=`<div><div class="section-title">👥 Partes (${partes.length})</div><div class="partes-grid">`;
+      const poloOrder={ATIVO:0,PASSIVO:1};
+      [...partes].sort((a,b)=>(poloOrder[a['Polo']]??2)-(poloOrder[b['Polo']]??2)).forEach(part=>{
+        const nome=part['Nome']||'';
+        const polo=part['Polo']||'';
+        const tpPessoa=part['Tipo de Pessoa']||'';
+        const tpParte=part['Tipo de Parte']||'';
+        const tpDoc=part['Tipo de Documento']||'';
+        const numDoc=part['Número do Documento']||'';
+        const docFmt=(tpDoc==='CPF'||tpDoc==='CPF_INVALIDO')?fmtCPF(numDoc):(tpDoc==='CNPJ'?fmtCPF(numDoc):numDoc);
+        const a1Nome=part['Nome Advogado 1'], a1Oab=part['OAB Advogado 1'], a1Cpf=part['CPF Advogado 1'];
+        const a2Nome=part['Nome Advogado 2'], a2Oab=part['OAB Advogado 2'], a2Cpf=part['CPF Advogado 2'];
+        const insc=part['Inscricao']||'';
+        html+=`<div class="parte-card">
+          <div class="nome">${esc(fmtUpper(nome))}</div>
+          <div><span class="tag tag-${polo}">${esc(polo)}</span> <span class="tag tag-${tpPessoa}">${esc(tpPessoa)}</span> <span style="font-size:.68em;color:var(--text-secondary)">${esc(tpParte)}</span></div>
+          <div class="detail">${tpDoc?esc(tpDoc)+': ':''}${esc(docFmt)}${insc?' · '+esc(insc):''}</div>`;
+        if(a1Nome)html+=`<div class="adv">⚖️ ${esc(fmtUpper(a1Nome))} ${a1Oab?'(OAB '+esc(a1Oab)+')':''}${a1Cpf?' · CPF '+fmtCPF(a1Cpf):''}</div>`;
+        if(a2Nome)html+=`<div class="adv">⚖️ ${esc(fmtUpper(a2Nome))} ${a2Oab?'(OAB '+esc(a2Oab)+')':''}${a2Cpf?' · CPF '+fmtCPF(a2Cpf):''}</div>`;
+        html+=`</div>`;
+      });
+      html+=`</div></div>`;
+    }
+
+    if(docs.length){
+      html+=`<div><div class="section-title">📄 Documentos (${docs.length})</div>
+      <table><thead><tr><th>#</th><th>Data</th><th>Tipo</th><th>Nome</th><th>Sigilo</th><th>Págs</th></tr></thead><tbody>`;
+      [...docs].sort((a,b)=>((b['Sequência']||0)-(a['Sequência']||0))).forEach(d=>{
+        html+=`<tr>
+          <td>${esc(d['Sequência'])}</td>
+          <td style="white-space:nowrap;font-size:.74em">${fmtData(d['DataHora Juntada'])}</td>
+          <td>${esc(d['Tipo Documento'])}</td>
+          <td>${esc(d['Nome'])}</td>
+          <td>${esc(d['Nível Sigilo'])}</td>
+          <td>${d['Qtd Páginas']!=null&&d['Qtd Páginas']!==''?esc(d['Qtd Páginas']):'-'}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>`;
+    }
+
+    if(movs.length){
+      html+=`<div><div class="section-title">📅 Movimentos (${movs.length})</div>
+      <table><thead><tr><th>Data</th><th>Descrição</th><th>Instância</th></tr></thead><tbody>`;
+      [...movs].sort((a,b)=>String(b['DataHora']||'').localeCompare(String(a['DataHora']||''))).forEach(m=>{
+        html+=`<tr>
+          <td style="white-space:nowrap;font-size:.74em">${fmtData(m['DataHora'])}</td>
+          <td>${esc(m['Descrição'])}</td>
+          <td>${esc(m['Instância']||'')}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>`;
+    }
+
+    if(trams.length){
+      html+=`<div><div class="section-title">📋 Tramitações</div>`;
+      let ult=trams[trams.length-1];
+      html+=`<div class="keyval">`;
+      if(ult['Data Hora Última Distribuição'])html+=`<span class="k">Data</span><span class="v">${fmtData(ult['Data Hora Última Distribuição'])}</span>`;
+      if(ult['Órgão Julgador Nome'])html+=`<span class="k">Órgão</span><span class="v">${esc(ult['Órgão Julgador Nome'])}</span>`;
+      if(ult['Classe (Descrições)'])html+=`<span class="k">Classe</span><span class="v">${esc(ult['Classe (Descrições)'])}</span>`;
+      if(ult['Assunto (Descrições)'])html+=`<span class="k">Assunto</span><span class="v">${esc(ult['Assunto (Descrições)'])}</span>`;
+      html+=`</div></div>`;
+    }
+
+    html+=`</div></div>`;
+  });
+  html+='</div>';
+
+  if(errosFiltrados.length){
+    html+=`<div class="erros-section"><h3>⚠️ Processos com erro (${errosFiltrados.length})</h3>`;
+    errosFiltrados.forEach(e=>{
+      html+=`<div class="erro-item"><div class="erro-proc">${esc(e['Número Processo']||'')}</div><div class="erro-motivo">${esc(e['Motivo']||'')}</div></div>`;
+    });
+    html+=`</div>`;
+  }
+
+  if(!sortedKeys.length&&!errosFiltrados.length){
+    html=`<div class="empty-state"><div class="big-icon">📂</div><p>Nenhum processo encontrado</p></div>`;
+  }
+
+  document.getElementById('content').innerHTML=html;
+}
+
+function toggleProc(el){
+  el.classList.toggle('open');
+  const tog=el.querySelector('.toggle');
+  if(tog)tog.classList.toggle('open');
+  const body=el.nextElementSibling;
+  if(body)body.classList.toggle('open');
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════════════════
+function updateUI(){
+  const info=document.getElementById('filesInfo');
+  info.style.display='block';
+  info.innerHTML='📁 <strong>Arquivos:</strong> '+
+    loadedFiles.map((f,i)=>`<span class="badge">${i+1}. ${esc(f.name)}</span>${f.layout?` <span class="layout-badge">${esc(f.layout)}</span>`:''}`).join(' ')+
+    ` <span style="color:var(--text-secondary);margin-left:4px">(${fileCount} arquivo${fileCount>1?'s':''})</span>`;
+}
+
+function setStatus(msg, isError){
+  const el=document.getElementById('statusMsg');
+  el.textContent=msg;
+  el.style.color=isError?'var(--danger)':'var(--success)';
+  if(msg)setTimeout(()=>{if(el.textContent===msg)el.textContent='';},4000);
+}
+
+// ─── Modal ────────────────────────────────────────────────
+function openModal(title, html){
+  document.getElementById('modalTitle').textContent=title;
+  document.getElementById('modalBody').innerHTML=html;
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('modalWindow').classList.add('open');
+}
+function closeModal(e){
+  if(e&&e.target!==document.getElementById('modalOverlay'))return;
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.getElementById('modalWindow').classList.remove('open');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+function resolveConflict(numero, field, value, isTa){
+  let key=(isTa?'ta_':'')+numero+'||'+field;
+  resolvedConflicts[key]=value;
+  saveState();
+  renderAll();
+  openConfModal();
+}
+
+function openConfModal(){
+  const data=window.__confData||[];
+  if(!data.length){openModal('⚠ Conflitos','<div class="modal-empty">Nenhum conflito</div>');return;}
+  let html='';
+  data.forEach(({numero,gerais,ta})=>{
+    html+=`<div class="modal-item"><div class="proc">${esc(numero)}</div>`;
+    Object.entries(gerais).forEach(([field,vals])=>{
+      let vv=vals.map(v=>{
+        let display=v;
+        if(field==='Valor Ação')display='R$ '+fmtMoeda(v);
+        let numEsc=esc(numero).replace(/'/g,"\\'");
+        let fldEsc=esc(field).replace(/'/g,"\\'");
+        let valEsc=esc(v).replace(/'/g,"\\'");
+        return `<span class="val-tag val-clickable" onclick="resolveConflict('${numEsc}','${fldEsc}','${valEsc}',false)">${esc(display)}</span>`;
+      });
+      html+=`<div class="field">${esc(field)}</div><div class="vals">${vv.join('<span style="color:var(--text-secondary);font-size:.7em;font-weight:600"> vs </span>')}</div>`;
+    });
+    Object.entries(ta).forEach(([field,vals])=>{
+      let vv=vals.map(v=>{
+        let display=v;
+        if(field==='Data Distribuição')display=fmtData(v);
+        let numEsc=esc(numero).replace(/'/g,"\\'");
+        let fldEsc=esc(field).replace(/'/g,"\\'");
+        let valEsc=esc(v).replace(/'/g,"\\'");
+        return `<span class="val-tag val-clickable" onclick="resolveConflict('${numEsc}','${fldEsc}','${valEsc}',true)">${esc(display)}</span>`;
+      });
+      html+=`<div class="field">${esc(field)}</div><div class="vals">${vv.join('<span style="color:var(--text-secondary);font-size:.7em;font-weight:600"> vs </span>')}</div>`;
+    });
+    html+=`</div>`;
+  });
+  openModal('⚠ Conflitos ('+data.length+')',html);
+}
+
+function openErroModal(){
+  const data=window.__erroData||[];
+  if(!data.length){openModal('⚠ Erros','<div class="modal-empty">Nenhum erro</div>');return;}
+  let html='';
+  data.forEach(e=>{
+    html+=`<div class="modal-item">
+      <div class="proc">${esc(e['Número Processo']||'')}</div>
+      <div class="field" style="margin-top:2px">${esc(e['Motivo']||'')}</div>
+    </div>`;
+  });
+  openModal('⚠ Erros ('+data.length+')',html);
+}
+
+function openPartesModal(){
+  const data=window.__partesData||[];
+  if(!data.length){openModal('👥 Partes','<div class="modal-empty">Nenhuma parte</div>');return;}
+  let html='';
+  data.forEach(({numero,partes})=>{
+    html+=`<div class="partes-modal-item"><div class="pm-proc">${esc(numero)}</div>`;
+    partes.forEach(p=>{
+      let polo=p['Polo']||'', nome=p['Nome']||'', tpDoc=p['Tipo de Documento']||'', numDoc=p['Número do Documento']||'';
+      let docFmt=(tpDoc==='CPF'||tpDoc==='CPF_INVALIDO')?fmtCPF(numDoc):(tpDoc==='CNPJ'?fmtCPF(numDoc):numDoc);
+      html+=`<div class="pm-parte"><span class="pm-tag tag-${polo}">${esc(polo)}</span> ${esc(fmtUpper(nome))}${docFmt?' · '+esc(docFmt):''}</div>`;
+    });
+    html+=`</div>`;
+  });
+  openModal('👥 Partes ('+data.length+' processos)',html);
+}
+
+function openSortModal(){
+  let current=customOrder?customOrder.join('\n'):'';
+  let html=`
+    <textarea class="sort-area" id="sortArea" placeholder="Insira um número de processo por linha...">${esc(current)}</textarea>
+    <div class="sort-info">Um processo por linha. A ordem da lista será respeitada. Processos fora da lista vão pro final.</div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn btn-gold" onclick="applySort()">✓ Aplicar</button>
+      <button class="btn" onclick="clearSort()" style="background:rgba(255,255,255,0.06)">✕ Limpar ordenação</button>
+    </div>`;
+  openModal('🔀 Ordenar processos',html);
+  setTimeout(()=>{
+    const ta=document.getElementById('sortArea');
+    if(ta)ta.focus();
+  },100);
+}
+
+function applySort(){
+  const ta=document.getElementById('sortArea');
+  if(!ta)return;
+  let linhas=ta.value.split('\n').map(s=>s.trim()).filter(s=>s);
+  if(linhas.length){
+    customOrder=linhas;
+    setStatus('✅ Ordem personalizada aplicada ('+linhas.length+' processos)');
+  }else{
+    customOrder=null;
+    setStatus('ℹ️ Ordem personalizada removida');
+  }
+  saveState();
+  closeModal();
+  renderAll();
+}
+
+function clearSort(){
+  customOrder=null;
+  saveState();
+  closeModal();
+  renderAll();
+  setStatus('ℹ️ Ordem personalizada removida');
+}
+
+function buildProcessData(){
+  const erros=allData['Erros']||[];
+  const processos={};
+  const allProcKeys=new Set();
+  const SKIP_CONFLITO=new Set(['Liminar']);
+  ['Dados Gerais','Partes','Distribuicao','Tramitacao Atual','Tramitacoes','Movimentos','Documentos'].forEach(s=>{
+    (allData[s]||[]).forEach(r=>{let k=getProcKey(r);if(k)allProcKeys.add(k);});
+  });
+  allProcKeys.forEach(k=>{processos[k]={}});
+  if(allData['Dados Gerais']){
+    let gPorProc={};
+    allData['Dados Gerais'].forEach(r=>{
+      let k=r['Número Processo']||r['Processo']||'';
+      if(!k||!processos[k])return;
+      if(!gPorProc[k])gPorProc[k]=[];
+      gPorProc[k].push(r);
+    });
+    Object.entries(gPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={}, conflitos={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        if(SKIP_CONFLITO.has(f)){merged[f]=rows[rows.length-1][f];return;}
+        let rk=k+'||'+f;
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        let fnorm=normVal(f);
+        vals=vals.filter(v=>normVal(v)!==fnorm);
+        let mv=mergeField(f,vals,resolvedConflicts[rk],conflitos);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].gerais=merged;
+      if(Object.keys(conflitos).length)processos[k].geraisConflitos=conflitos;
+    });
+  }
+  if(allData['Distribuicao']){
+    (allData['Distribuicao']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;
+      if(g&&!g['Órgão Julgador (Nome)']&&r['Órgão Julgador (Nome)'])
+        g['Órgão Julgador (Nome)']=r['Órgão Julgador (Nome)'];
+    });
+  }
+  if(allData['Movimentos']){
+    (allData['Movimentos']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;if(!g)return;
+      let desc=r['Descrição']||r['Detalhe']||'';
+      let cidade=extrairComarcaDeTexto(desc);
+      if(cidade&&!parseOrgao(g['Órgão Julgador (Nome)']||'').comarca&&!parseOrgao(g['Órgão Julgador (Nome)']||'').numero)
+        g['Órgão Julgador (Nome)']=' - '+cidade;
+    });
+  }
+  if(allData['Distribuicao']){
+    (allData['Distribuicao']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!processos[k].distribuicoes)processos[k].distribuicoes=[];
+      processos[k].distribuicoes.push(r);
+    });
+  }
+  if(allData['Partes']){
+    let pp={};
+    (allData['Partes']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!pp[k])pp[k]=[];
+      pp[k].push(r);
+    });
+    Object.entries(pp).forEach(([k,rows])=>{
+      let grupos=new Map();
+      rows.forEach(r=>{
+        let nn=r['Nome']?normVal(r['Nome']):'';
+        let polo=r['Polo']||'';
+        let chave=nn+'|'+polo;
+        if(!grupos.has(chave))grupos.set(chave,[]);
+        grupos.get(chave).push(r);
+      });
+      let merged=[];
+      grupos.forEach(g=>{
+        if(g.length===1){merged.push(g[0]);return;}
+        let base={...g[0]};
+        g.slice(1).forEach(r=>{
+          Object.keys(r).forEach(f=>{
+            if(base[f]==null||base[f]==='')base[f]=r[f];
+          });
+        });
+        merged.push(base);
+      });
+      processos[k].partes=merged;
+    });
+  }
+  if(allData['Tramitacao Atual']){
+    let taPorProc={};
+    (allData['Tramitacao Atual']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!taPorProc[k])taPorProc[k]=[];
+      taPorProc[k].push(r);
+    });
+    Object.entries(taPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={}, conflitos={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        if(SKIP_CONFLITO.has(f)){merged[f]=rows[rows.length-1][f];return;}
+        let rk='ta_'+k+'||'+f;
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        let mv=mergeField(f,vals,resolvedConflicts[rk],conflitos);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].tramitacaoAtual=merged;
+      if(Object.keys(conflitos).length)processos[k].taConflitos=conflitos;
+    });
+  }
+  // Computed fields for each process
+  allProcKeys.forEach(num=>{
+    const p=processos[num];
+    if(!p)return;
+    const g=p.gerais||{};
+    const ta=p.tramitacaoAtual||{};
+    const partes=p.partes||[];
+    const autores=partes.filter(pa=>pa['Polo']==='ATIVO');
+    const autor=autores[0]||{};
+    p.autorNome=fmtUpper(autor['Nome']||'');
+    const autorDoc=autor['Número do Documento']||'';
+    p.autorDoc=autorDoc;
+    p.autorCpf=autor['Tipo de Documento']==='CPF'?fmtCPF(autorDoc):'';
+    p.advNome=fmtUpper(autor['Nome Advogado 1']||'');
+    p.advOab=autor['OAB Advogado 1']||'';
+    const reus=partes.filter(pa=>pa['Polo']==='PASSIVO');
+    p.reuStr=reus.map(r=>r['Nome']||'').filter(Boolean).join('; ');
+    const orgaoStr=g['Órgão Julgador (Nome)']||'';
+    p.orgaoP=parseOrgao(orgaoStr);
+    p.valor=g['Valor Ação']||ta['Valor Ação']||'';
+    p.dataAud=g['Data Audiência']||'';
+    p.horaAud=g['Hora Audiência']||'';
+    p.tipoAud=g['Tipo Audiência']||'';
+    p.classe=ta['Classe (Descrições)']||g['Classe (Descrições)']||'';
+    p.dataDist=ta['Data Distribuição']||g['Data Distribuição']||'';
+  });
+  return {processos,allProcKeys,erros};
+}
+function exportJSON(){
+  const data=buildProcessData();
+  const obj={
+    exportedAt:new Date().toISOString(),
+    customOrder:customOrder||[],
+    resolvedConflicts,
+    allData,
+    processos:data.processos,
+    totalProcessos:data.allProcKeys.size,
+    totalErros:data.erros.length,
+    summary:{
+      processos:data.allProcKeys.size,
+      erros:data.erros.length,
+      conflitos:Object.values(data.processos).reduce((a,p)=>a+(p.geraisConflitos?Object.keys(p.geraisConflitos).length:0)+(p.taConflitos?Object.keys(p.taConflitos).length:0),0)
+    }
+  };
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='processos_'+new Date().toISOString().slice(0,19).replace(/[:-]/g,'')+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus('✅ JSON exportado');
+}
+
+function exportCSV(){
+  // Rebuild process data like renderAll
+  const erros=allData['Erros']||[];
+  const processos={};
+  const allProcKeys=new Set();
+  const SKIP_CONFLITO=new Set(['Liminar']);
+  ['Dados Gerais','Partes','Distribuicao','Tramitacao Atual','Tramitacoes','Movimentos','Documentos'].forEach(s=>{
+    (allData[s]||[]).forEach(r=>{let k=getProcKey(r);if(k)allProcKeys.add(k);});
+  });
+  allProcKeys.forEach(k=>{processos[k]={}});
+
+  // Merge Dados Gerais
+  if(allData['Dados Gerais']){
+    let gPorProc={};
+    allData['Dados Gerais'].forEach(r=>{
+      let k=r['Número Processo']||r['Processo']||'';
+      if(!k||!processos[k])return;
+      if(!gPorProc[k])gPorProc[k]=[];
+      gPorProc[k].push(r);
+    });
+    Object.entries(gPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={}, conflitos={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        if(SKIP_CONFLITO.has(f)){merged[f]=rows[rows.length-1][f];return;}
+        let rk=k+'||'+f;
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        let fnorm=normVal(f);
+        vals=vals.filter(v=>normVal(v)!==fnorm);
+        let mv=mergeField(f,vals,resolvedConflicts[rk],conflitos);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].gerais=merged;
+      if(Object.keys(conflitos).length)processos[k].geraisConflitos=conflitos;
+    });
+  }
+  // Partes (mesclagem por nome+Polo, igual ao renderAll)
+  if(allData['Partes']){
+    let pp={};
+    (allData['Partes']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!pp[k])pp[k]=[];
+      pp[k].push(r);
+    });
+    Object.entries(pp).forEach(([k,rows])=>{
+      let grupos=new Map();
+      rows.forEach(r=>{
+        let nn=r['Nome']?normVal(r['Nome']):'';
+        let polo=r['Polo']||'';
+        let chave=nn+'|'+polo;
+        if(!grupos.has(chave))grupos.set(chave,[]);
+        grupos.get(chave).push(r);
+      });
+      let merged=[];
+      grupos.forEach(g=>{
+        if(g.length===1){merged.push(g[0]);return;}
+        let base={...g[0]};
+        g.slice(1).forEach(r=>{
+          Object.keys(r).forEach(f=>{
+            if(base[f]==null||base[f]==='')base[f]=r[f];
+          });
+        });
+        merged.push(base);
+      });
+      processos[k].partes=merged;
+    });
+  }
+  // Tramitacao Atual
+  if(allData['Tramitacao Atual']){
+    let taPorProc={};
+    (allData['Tramitacao Atual']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!taPorProc[k])taPorProc[k]=[];
+      taPorProc[k].push(r);
+    });
+    Object.entries(taPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        if(!vals.length)return;
+        let mv=mergeField(f,vals);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].tramitacaoAtual=merged;
+    });
+  }
+  // Fallback: copia Órgão Julgador da Distribuição (mesmo do renderAll)
+  if(allData['Distribuicao']){
+    (allData['Distribuicao']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;
+      if(g&&!g['Órgão Julgador (Nome)']&&r['Órgão Julgador (Nome)'])
+        g['Órgão Julgador (Nome)']=r['Órgão Julgador (Nome)'];
+    });
+  }
+  // Fallback: extrai comarca de movimentos
+  if(allData['Movimentos']){
+    (allData['Movimentos']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;if(!g)return;
+      let desc=r['Descrição']||r['Detalhe']||'';
+      let cidade=extrairComarcaDeTexto(desc);
+      if(cidade&&!parseOrgao(g['Órgão Julgador (Nome)']||'').comarca&&!parseOrgao(g['Órgão Julgador (Nome)']||'').numero)
+        g['Órgão Julgador (Nome)']=' - '+cidade;
+    });
+  }
+
+  const escCSV=s=>{
+    if(s==null)return'';
+    let t=String(s);
+    // Replace dot decimal with comma in monetary-looking values
+    if(/^\d+(\.\d+)?$/.test(t))t=t.replace('.',',');
+    if(t.includes('"')||t.includes(';')||t.includes('\n'))t='"'+t.replace(/"/g,'""')+'"';
+    return t;
+  };
+
+  // Header
+  const header='Processo;Num Cliente;Classe;Nº Órgão;Comarca;Autor;CPF Autor;Advogado;OAB Advogado;UF OAB;Data Distribuição;Réu(s);Valor Ação/Causa;Data Audiência;Hora Audiência;Tipo Audiência';
+  let linhas=[header];
+  let sortedKeys;
+  if(customOrder&&customOrder.length){
+    let ordem=new Map(customOrder.map((n,i)=>[n,i]));
+    let emLista=[], foraLista=[];
+    allProcKeys.forEach(n=>{
+      if(ordem.has(n))emLista.push(n);
+      else foraLista.push(n);
+    });
+    emLista.sort((a,b)=>ordem.get(a)-ordem.get(b));
+    foraLista.sort();
+    sortedKeys=[...emLista,...foraLista];
+  }else{
+    sortedKeys=Array.from(allProcKeys).sort();
+  }
+
+  sortedKeys.forEach(num=>{
+    const p=processos[num];
+    const g=p.gerais||{};
+    const ta=p.tramitacaoAtual||{};
+    const partes=p.partes||[];
+
+    // Autor
+    const autores=partes.filter(pa=>pa['Polo']==='ATIVO');
+    const autor=autores[0]||{};
+    const autorNome=fmtUpper(autor['Nome']||'');
+    const autorDoc=autor['Número do Documento']||'';
+    const autorCpf=autor['Tipo de Documento']==='CPF'?fmtCPF(autorDoc):'';
+
+    const advNome=fmtUpper(autor['Nome Advogado 1']||'');
+    const advOab=autor['OAB Advogado 1']||'';
+    const advCpf=autor['CPF Advogado 1']||'';
+    let ufOab='';
+    if(advOab){
+      let sigla=g['Sigla Tribunal']||'';
+      if(sigla==='TRF3')ufOab='SP';
+      else if(sigla==='TJBA')ufOab='BA';
+      else if(sigla==='TJSP')ufOab='SP';
+      else if(sigla==='TJRJ')ufOab='RJ';
+    }
+
+    // Réus
+    const reus=partes.filter(pa=>pa['Polo']==='PASSIVO');
+    const reuStr=reus.map(r=>r['Nome']||'').filter(Boolean).join('; ');
+
+    // Órgão Julgador
+    const orgaoStr=g['Órgão Julgador (Nome)']||'';
+    const orgaoP=parseOrgao(orgaoStr);
+
+    // Valor
+    const valor=g['Valor Ação']||ta['Valor Ação']||'';
+
+    // Audiência
+    const dataAud=g['Data Audiência']||'';
+    const horaAud=g['Hora Audiência']||'';
+    const tipoAud=g['Tipo Audiência']||'';
+    // Classe
+    const classe=ta['Classe (Descrições)']||g['Classe (Descrições)']||'';
+    // Data Distribuição
+    const dataDist=ta['Data Distribuição']||g['Data Distribuição']||'';
+
+    const linha=[
+      num,                        // Processo
+      num,                        // Num Cliente (mesmo numero)
+      classe,                     // Classe
+      orgaoP.numero,              // Nº Órgão
+      orgaoP.comarca,             // Comarca
+      autorNome,                  // Autor
+      autorCpf,                   // CPF Autor
+      advNome,                    // Advogado
+      advOab,                     // OAB Advogado
+      ufOab,                      // UF OAB
+      fmtData(dataDist),          // Data Distribuição
+      reuStr,                     // Réu(s)
+      valor,                      // Valor Ação (mantém formato original)
+      fmtData(dataAud),           // Data Audiência
+      horaAud,                    // Hora Audiência
+      tipoAud                     // Tipo Audiência
+    ].map(escCSV).join(';');
+    linhas.push(linha);
+  });
+
+  const blob=new Blob(['\uFEFF'+linhas.join('\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='processos_'+new Date().toISOString().slice(0,19).replace(/[:-]/g,'')+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus('✅ CSV exportado');
+}
+
+function exportXLSX(){
+  const erros=allData['Erros']||[];
+  const processos={};
+  const allProcKeys=new Set();
+  const SKIP_CONFLITO=new Set(['Liminar']);
+  ['Dados Gerais','Partes','Distribuicao','Tramitacao Atual','Tramitacoes','Movimentos','Documentos'].forEach(s=>{
+    (allData[s]||[]).forEach(r=>{let k=getProcKey(r);if(k)allProcKeys.add(k);});
+  });
+  allProcKeys.forEach(k=>{processos[k]={}});
+
+  if(allData['Dados Gerais']){
+    let gPorProc={};
+    allData['Dados Gerais'].forEach(r=>{
+      let k=r['Número Processo']||r['Processo']||'';
+      if(!k||!processos[k])return;
+      if(!gPorProc[k])gPorProc[k]=[];
+      gPorProc[k].push(r);
+    });
+    Object.entries(gPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={}, conflitos={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        if(SKIP_CONFLITO.has(f)){merged[f]=rows[rows.length-1][f];return;}
+        let rk=k+'||'+f;
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        let fnorm=normVal(f);
+        vals=vals.filter(v=>normVal(v)!==fnorm);
+        let mv=mergeField(f,vals,resolvedConflicts[rk],conflitos);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].gerais=merged;
+      if(Object.keys(conflitos).length)processos[k].geraisConflitos=conflitos;
+    });
+  }
+  if(allData['Partes']){
+    let pp={};
+    (allData['Partes']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!pp[k])pp[k]=[];
+      pp[k].push(r);
+    });
+    Object.entries(pp).forEach(([k,rows])=>{
+      let grupos=new Map();
+      rows.forEach(r=>{
+        let nn=r['Nome']?normVal(r['Nome']):'';
+        let polo=r['Polo']||'';
+        let chave=nn+'|'+polo;
+        if(!grupos.has(chave))grupos.set(chave,[]);
+        grupos.get(chave).push(r);
+      });
+      let merged=[];
+      grupos.forEach(g=>{
+        if(g.length===1){merged.push(g[0]);return;}
+        let base={...g[0]};
+        g.slice(1).forEach(r=>{
+          Object.keys(r).forEach(f=>{
+            if(base[f]==null||base[f]==='')base[f]=r[f];
+          });
+        });
+        merged.push(base);
+      });
+      processos[k].partes=merged;
+    });
+  }
+  if(allData['Tramitacao Atual']){
+    let taPorProc={};
+    (allData['Tramitacao Atual']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      if(!taPorProc[k])taPorProc[k]=[];
+      taPorProc[k].push(r);
+    });
+    Object.entries(taPorProc).forEach(([k,rows])=>{
+      if(!processos[k])return;
+      let merged={};
+      let fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+      fields.forEach(f=>{
+        let vals=rows.map(r=>r[f]).filter(v=>v!=''&&v!=null);
+        if(!vals.length)return;
+        let mv=mergeField(f,vals);
+        if(mv!==undefined)merged[f]=mv;
+      });
+      processos[k].tramitacaoAtual=merged;
+    });
+  }
+  if(allData['Distribuicao']){
+    (allData['Distribuicao']).forEach(r=>{
+      let k=getProcKey(r);if(!k||!processos[k])return;
+      let g=processos[k].gerais;
+      if(g&&!g['Órgão Julgador (Nome)']&&r['Órgão Julgador (Nome)'])
+        g['Órgão Julgador (Nome)']=r['Órgão Julgador (Nome)'];
+    });
+  }
+
+  const header=['Processo','Num Cliente','Classe','Nº Órgão','Comarca','Autor','CPF Autor','Advogado','OAB Advogado','UF OAB','Data Distribuição','Réu(s)','Valor Ação/Causa','Data Audiência','Hora Audiência','Tipo Audiência'];
+  let dataRows=[];
+  let sortedKeys;
+  if(customOrder&&customOrder.length){
+    let ordem=new Map(customOrder.map((n,i)=>[n,i]));
+    let emLista=[], foraLista=[];
+    allProcKeys.forEach(n=>{
+      if(ordem.has(n))emLista.push(n);
+      else foraLista.push(n);
+    });
+    emLista.sort((a,b)=>ordem.get(a)-ordem.get(b));
+    foraLista.sort();
+    sortedKeys=[...emLista,...foraLista];
+  }else{
+    sortedKeys=Array.from(allProcKeys).sort();
+  }
+
+  sortedKeys.forEach(num=>{
+    const p=processos[num];
+    const g=p.gerais||{};
+    const ta=p.tramitacaoAtual||{};
+    const partes=p.partes||[];
+
+    const autores=partes.filter(pa=>pa['Polo']==='ATIVO');
+    const autor=autores[0]||{};
+    const autorNome=fmtUpper(autor['Nome']||'');
+    const autorDoc=autor['Número do Documento']||'';
+    const autorCpf=autor['Tipo de Documento']==='CPF'?fmtCPF(autorDoc):'';
+    const advNome=fmtUpper(autor['Nome Advogado 1']||'');
+    const advOab=autor['OAB Advogado 1']||'';
+    let ufOab='';
+    if(advOab){
+      let sigla=g['Sigla Tribunal']||'';
+      if(sigla==='TRF3')ufOab='SP';
+      else if(sigla==='TJBA')ufOab='BA';
+      else if(sigla==='TJSP')ufOab='SP';
+      else if(sigla==='TJRJ')ufOab='RJ';
+    }
+    const reus=partes.filter(pa=>pa['Polo']==='PASSIVO');
+    const reuStr=reus.map(r=>r['Nome']||'').filter(Boolean).join('; ');
+    const orgaoStr=g['Órgão Julgador (Nome)']||'';
+    const orgaoP=parseOrgao(orgaoStr);
+    const valor=g['Valor Ação']||ta['Valor Ação']||'';
+    const dataAud=g['Data Audiência']||'';
+    const horaAud=g['Hora Audiência']||'';
+    const tipoAud=g['Tipo Audiência']||'';
+    const classe=ta['Classe (Descrições)']||g['Classe (Descrições)']||'';
+    const dataDist=ta['Data Distribuição']||g['Data Distribuição']||'';
+
+    dataRows.push([
+      String(num),
+      String(num),
+      String(classe),
+      String(orgaoP.numero),
+      String(orgaoP.comarca),
+      String(autorNome),
+      String(autorCpf),
+      String(advNome),
+      String(advOab),
+      String(ufOab),
+      String(fmtData(dataDist)),
+      String(reuStr),
+      String(valor),
+      String(fmtData(dataAud)),
+      String(horaAud),
+      String(tipoAud)
+    ]);
+  });
+
+  const ws=XLSX.utils.aoa_to_sheet([header,...dataRows]);
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let R=range.s.r;R<=range.e.r;R++){
+    for(let C=range.s.c;C<=range.e.c;C++){
+      const addr=XLSX.utils.encode_cell({r:R,c:C});
+      if(!ws[addr])continue;
+      ws[addr].t='s';
+      ws[addr].z='@';
+    }
+  }
+  ws['!cols']=header.map(()=>({wch:24}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Processos');
+  XLSX.writeFile(wb,'processos_'+new Date().toISOString().slice(0,19).replace(/[:-]/g,'')+'.xlsx');
+  setStatus('✅ XLSX exportado');
+}
+
+function saveState(){
+  try{
+    localStorage.setItem('vis-processos',JSON.stringify(allData));
+    localStorage.setItem('vis-files',JSON.stringify(loadedFiles));
+    localStorage.setItem('vis-count',String(fileCount));
+    if(customOrder)localStorage.setItem('vis-order',JSON.stringify(customOrder));
+    else localStorage.removeItem('vis-order');
+    if(Object.keys(resolvedConflicts).length)localStorage.setItem('vis-resolved',JSON.stringify(resolvedConflicts));
+    else localStorage.removeItem('vis-resolved');
+  }catch(e){/* quota exceeded, silently ignore */}
+}
+
+function restoreState(){
+  try{
+    const d=localStorage.getItem('vis-processos');
+    const f=localStorage.getItem('vis-files');
+    const c=localStorage.getItem('vis-count');
+    const o=localStorage.getItem('vis-order');
+    const r=localStorage.getItem('vis-resolved');
+    if(d&&f&&c){
+      allData=JSON.parse(d);
+      loadedFiles=JSON.parse(f);
+      fileCount=parseInt(c,10)||0;
+      if(o)customOrder=JSON.parse(o);
+      if(r)resolvedConflicts=JSON.parse(r);
+      return true;
+    }
+  }catch(e){/* corrupted, ignore */}
+  return false;
+}
+
+function clearAll(){
+  if(!confirm('Tem certeza?'))return;
+  allData={};loadedFiles=[];fileCount=0;customOrder=null;resolvedConflicts={};
+  localStorage.removeItem('vis-processos');
+  localStorage.removeItem('vis-files');
+  localStorage.removeItem('vis-count');
+  localStorage.removeItem('vis-order');
+  localStorage.removeItem('vis-resolved');
+  document.getElementById('summaryBar').style.display='none';
+  document.getElementById('actionsBar').style.display='none';
+  document.getElementById('filesInfo').style.display='none';
+  document.getElementById('statusMsg').textContent='';
+  document.getElementById('content').innerHTML=
+    `<div class="empty-state"><div class="big-icon">📂</div><p>Carregue uma planilha ou importe JSON para começar</p></div>`;
+  document.getElementById('fileInput').value='';
+  document.getElementById('jsonInput').value='';
+}
+
+// ═══════════════════════════════════════════════════════════
+// UPLOAD
+// ═══════════════════════════════════════════════════════════
+const uploadArea=document.getElementById('uploadArea');
+const fileInput=document.getElementById('fileInput');
+const jsonArea=document.getElementById('jsonArea');
+const jsonInput=document.getElementById('jsonInput');
+
+uploadArea.addEventListener('click',()=>fileInput.click());
+uploadArea.addEventListener('dragover',e=>{e.preventDefault();uploadArea.classList.add('dragover')});
+uploadArea.addEventListener('dragleave',()=>uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop',e=>{
+  e.preventDefault();uploadArea.classList.remove('dragover');
+  if(e.dataTransfer.files.length)loadExcelFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change',e=>{if(e.target.files.length)loadExcelFile(e.target.files[0]);});
+
+jsonArea.addEventListener('click',()=>jsonInput.click());
+jsonInput.addEventListener('change',e=>{if(e.target.files.length)loadJSONFile(e.target.files[0]);});
+
+document.getElementById('fileInput').value='';
+document.getElementById('jsonInput').value='';
+
+if(restoreState()&&Object.keys(allData).length){
+  renderAll();
+  updateUI();
+  document.getElementById('summaryBar').style.display='flex';
+  document.getElementById('actionsBar').style.display='flex';
+}else{
+  allData={};loadedFiles=[];fileCount=0;
+  document.getElementById('content').innerHTML=
+    `<div class="empty-state"><div class="big-icon">📂</div><p>Carregue uma planilha ou importe JSON para começar</p></div>`;
+}
+</script>
+</body>
+</html>
