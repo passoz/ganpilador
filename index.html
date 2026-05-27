@@ -689,7 +689,7 @@ function adaptLayoutBenner(fileData){
 
     return{
       'Número Processo':proc,
-      'Valor Ação':String(r['V. Causa']||r['Valor Causa']||'').replace(/\./g,'').replace(',','.'),
+      'Valor Ação': (()=>{let v=String(r['V. Causa']||r['Valor Causa']||'').replace(/[R$\s]/g,'').trim();if(v.includes(',')){v=v.replace(/\./g,'').replace(',','.')}else if((v.match(/\./g)||[]).length>1){v=v.replace(/\./g,'')}return v.replace(/,/g,'')})(),
       'Data Distribuição':toDateBR(r['Data Ajuiz.']||r['Data Ajuizamento']||''),
       'Comarca':comarca,
       'Órgão Julgador (Nome)':orgaoJulgador,
